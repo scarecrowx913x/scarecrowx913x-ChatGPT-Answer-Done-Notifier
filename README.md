@@ -20,6 +20,8 @@ ChatGPT を別タブに置いたまま作業しているときでも、「返事
 2. 以下のリンクをクリック
 
    👉 [インストールはこちら](https://github.com/scarecrowx913x/ChatGPT-Answer-Done-Notifier/raw/main/ChatGPT-Answer-Done-Notifier.user.js)
+       (https://github.com/scarecrowx913x/ChatGPT-Answer-Done-Notifier/raw/main/ChatGPT-Answer-Done-Notifier.user.js)
+
 
 
    ```
