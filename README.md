@@ -15,7 +15,7 @@ ChatGPT を別タブに置いたまま作業しているときでも、「返事
 1. ブラウザに Userscript マネージャ（Tampermonkey / Violentmonkey など）をインストールする
 
 
-   ```
+
    
 2. 以下のリンクをクリック
 
@@ -26,11 +26,11 @@ ChatGPT を別タブに置いたまま作業しているときでも、「返事
 https://raw.githubusercontent.com/scarecrowx913x/ChatGPT-Prompt-UI-Launcher/main/ChatGPT-Prompt-UI-Launcher.user.js
 
 
-   ```
+
 
 3. Userscript マネージャのインストール画面が出るので、「インストール」を選ぶ
 
----
+
 
 
 ## 使い方
