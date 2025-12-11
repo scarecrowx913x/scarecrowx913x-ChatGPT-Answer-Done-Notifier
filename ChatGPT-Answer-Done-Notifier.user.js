@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name        ChatGPT Answer Done Notifier
 // @namespace   https://github.com/scarecrowx913x/ChatGPT-Answer-Done-Notifier
-// @version     1.1.0
-// @description ChatGPTの回答完了を検知して、ビープ音＋デスクトップ通知＋ファビコンの緑●バッジで知らせるシンプル通知スクリプト（タブ非アクティブ時のみ通知・静寂時間とクールダウンで多重通知を抑制）
+// @version     1.2.0
+// @description ChatGPTの回答完了を検知して、ビープ音＋デスクトップ通知＋ファビコンの緑●バッジで知らせるシンプル通知スクリプト
 // @author      scarecrowx913x
 // @match       https://chatgpt.com/*
 // @match       https://chat.openai.com/*
@@ -12,7 +12,6 @@
 // @run-at      document-idle
 // @noframes
 // ==/UserScript==
-
 
 (function () {
   'use strict';
@@ -32,8 +31,9 @@
   // 直近で通知した時刻
   var lastNotifiedAt = 0;
 
-  // 通知ON/OFFフラグ（デフォルトはON）
-  var enabled = GM_getValue('gptNotifier_enabled', true);
+  // 音・通知の個別ON/OFFフラグ（デフォルトは両方ON）
+  var soundEnabled = GM_getValue('gptNotifier_soundEnabled', true);
+  var notificationEnabled = GM_getValue('gptNotifier_notificationEnabled', true);
 
   // Observer を二重で付けないためのフラグ
   var observerInitialized = false;
@@ -45,23 +45,43 @@
   var originalFaviconHref = null;
   var faviconBadged = false;
 
+  // ChatGPTのアシスタントメッセージっぽい要素を拾うためのセレクタ
+  // UI変更に強くするため、よく使われる属性をまとめて見る
+  var ASSISTANT_SELECTOR = [
+    '[data-message-author-role="assistant"]',
+    '[data-message-author-role*=assistant]',
+    '[data-message-id][data-message-author-role]',
+    '[data-testid="assistant-message"]'
+  ].join(',');
+
   // 共通ログ
   function log() {
     console.log.apply(console, ['[GPT-Notifier]'].concat(Array.from(arguments)));
   }
 
-  // Tampermonkey のメニュー登録（ラベルは固定）
+  // Tampermonkey のメニュー登録（音・通知を個別に制御）
   function setupMenu() {
     GM_registerMenuCommand(
-      '通知機能のON/OFFを切り替える',
+      'ビープ音のON/OFFを切り替える',
       function () {
-        enabled = !enabled;
-        GM_setValue('gptNotifier_enabled', enabled);
-        alert('ChatGPT通知は今 ' + (enabled ? 'ON' : 'OFF') + ' です');
-        log('通知状態を切り替えました →', enabled ? 'ON' : 'OFF');
+        soundEnabled = !soundEnabled;
+        GM_setValue('gptNotifier_soundEnabled', soundEnabled);
+        alert('ChatGPT通知のビープ音は今 ' + (soundEnabled ? 'ON' : 'OFF') + ' です');
+        log('ビープ音の状態を切り替えました →', soundEnabled ? 'ON' : 'OFF');
       }
     );
-    log('メニュー登録済み（現在の状態: ' + (enabled ? 'ON' : 'OFF') + '）');
+
+    GM_registerMenuCommand(
+      'デスクトップ通知のON/OFFを切り替える',
+      function () {
+        notificationEnabled = !notificationEnabled;
+        GM_setValue('gptNotifier_notificationEnabled', notificationEnabled);
+        alert('ChatGPTのデスクトップ通知は今 ' + (notificationEnabled ? 'ON' : 'OFF') + ' です');
+        log('デスクトップ通知の状態を切り替えました →', notificationEnabled ? 'ON' : 'OFF');
+      }
+    );
+
+    log('メニュー登録済み（音:' + (soundEnabled ? 'ON' : 'OFF') + ', 通知:' + (notificationEnabled ? 'ON' : 'OFF') + '）');
   }
 
   function setupObserver() {
@@ -86,9 +106,23 @@
 
       for (var i = 0; i < mutations.length; i++) {
         var m = mutations[i];
-        if (!(m.target instanceof HTMLElement)) continue;
+        var node = m.target;
+        var el = null;
 
-        if (m.target.closest('[data-message-author-role="assistant"]')) {
+        // テキストノード(characterData)も拾う
+        if (node.nodeType === Node.TEXT_NODE) {
+          el = node.parentElement;
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+          el = node;
+        } else {
+          continue;
+        }
+
+        if (!el) continue;
+
+        // アシスタントメッセージの中 or その近辺かどうか判定
+        var host = el.closest(ASSISTANT_SELECTOR);
+        if (host) {
           touchedAssistant = true;
           break;
         }
@@ -126,12 +160,6 @@
   }
 
   function notifyDone() {
-    // ON/OFFがOFFなら何もしない
-    if (!enabled) {
-      log('通知はOFFなのでスキップ');
-      return;
-    }
-
     var now = Date.now();
     if (now - lastNotifiedAt < COOLDOWN_MS) {
       log('クールダウン中のため通知スキップ');
@@ -139,15 +167,21 @@
     }
     lastNotifiedAt = now;
 
-    log('回答完了と判定 → 通知＆ビープを1回ずつ実行');
+    log('回答完了と判定 → 通知処理を実行');
 
-    // 常にビープ音は鳴らす
-    playBeep();
+    // ビープ音（個別ON/OFF）
+    if (soundEnabled) {
+      playBeep();
+    } else {
+      log('ビープ音はOFFなのでスキップ');
+    }
 
-    // タブを見ていないときだけデスクトップ通知＆ファビコンバッジ
-    if (!document.hasFocus()) {
+    // デスクトップ通知＆ファビコンバッジ（個別ON/OFF）
+    if (notificationEnabled) {
       showNotification();
       setFaviconBadge(true);
+    } else {
+      log('デスクトップ通知はOFFなのでスキップ（ファビコンバッジも付けない）');
     }
   }
 
